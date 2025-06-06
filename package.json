@@ -1,19 +1,19 @@
 {
-  "name": "whatsapp-bot-single-file",
-  "version": "1.0.0",
-  "description": "WhatsApp bot (single file) for connection and ping test",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "keywords": [],
-  "author": "Your Name",
-  "license": "ISC",
-  "dependencies": {
-    "@hapi/boom": "^10.0.1",
-    "@whiskeysockets/baileys": "github:n10XBi/Gen-Baileys",
-    "chalk": "^4.1.2",
-    "pino": "^7.11.0",
-    "readline": "^1.3.0"
-  }
+    "name": "whatsapp-bot-single-file",
+    "version": "1.0.0",
+    "description": "WhatsApp bot (single file) for connection and ping test",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js"
+    },
+    "keywords": [],
+    "author": "Your Name",
+    "license": "ISC",
+    "dependencies": {
+        "@hapi/boom": "^10.0.1",
+        "@whiskeysockets/baileys": "github:n10XBi/Gen-Baileys",
+        "chalk": "^4.1.2",
+        "pino": "^7.11.0",
+        "readline": "^1.3.0"
+    }
 }
