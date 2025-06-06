@@ -9,25 +9,39 @@
 
 console.clear();
 console.log('starting...');
-require('./settings/config');
-process.on("uncaughtException", console.error);
 
 const {
     default: makeWASocket,
     useMultiFileAuthState,
     DisconnectReason,
-    fetchLatestBaileysVersion,
-    makeInMemoryStore,
-    makeCacheableSignalKeyStore,
 } = require("@whiskeysockets/baileys");
 
-const chalk = require('chalk')
+const chalk = require('chalk');
 const pino = require('pino');
 const readline = require("readline");
 const fs = require('fs');
+const qrcode = require("qrcode-terminal");
+
 const { Boom } = require('@hapi/boom');
 
-const { smsg } = require('./start/lib/myfunction'); // Keep smsg for message parsing
+// Global settings - originally from config.js
+global.owner = "6287814960299";
+global.namaowner = "G3N⫹⫺";
+global.namach = "Informasi Bot & Website 2025";
+global.linkch = "https://whatsapp.com/channel/0029Vb51J3fIt5s2oJDnKN1q";
+global.idch = "120363398454335006@newsletter";
+global.packname = "WhatsApp Bot 2025";
+global.author = "https://wa.me/6287814960299";
+global.status = true;
+global.welcome = true;
+global.KEY = "GET APIKEY elevenlabs.io";
+global.IDVOICE = "GET ON elevenlabs.io";
+global.pairing = "GENTADEV";
+global.mess = {
+    owner: "Fitur ini khusus untuk owner!",
+    group: "Fitur ini untuk dalam grup!",
+    private: "Fitur ini untuk dalam private chat!",
+};
 
 const question = (text) => {
     const rl = readline.createInterface({
@@ -37,46 +51,24 @@ const question = (text) => {
     return new Promise((resolve) => {
         rl.question(text, resolve)
     });
-}
+};
 
 async function clientstart() {
     const {
         state,
         saveCreds
-    } = await useMultiFileAuthState(`./session`)
+    } = await useMultiFileAuthState(`./session`);
 
-    const usePairingCode = true
+    const usePairingCode = true; // Set to true to use pairing code
 
     const client = makeWASocket({
-        printQRInTerminal: false,
+        printQRInTerminal: false, // Set to true if you want QR in terminal when not using pairing code
         syncFullHistory: true,
         markOnlineOnConnect: true,
         connectTimeoutMs: 60000,
         defaultQueryTimeoutMs: 0,
         keepAliveIntervalMs: 10000,
         generateHighQualityLinkPreview: true,
-        patchMessageBeforeSending: (message) => {
-            const requiresPatch = !!(
-                message.buttonsMessage ||
-                message.templateMessage ||
-                message.listMessage
-            );
-            if (requiresPatch) {
-                message = {
-                    viewOnceMessage: {
-                        message: {
-                            messageContextInfo: {
-                                deviceListMetadataVersion: 2,
-                                deviceListMetadata: {},
-                            },
-                            ...message,
-                        },
-                    },
-                };
-            }
-
-            return message;
-        },
         version: (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version,
         browser: ["Ubuntu", "Chrome", "20.0.04"],
         logger: pino({
@@ -84,7 +76,7 @@ async function clientstart() {
         }),
         auth: {
             creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, pino().child({
+            keys: require("@whiskeysockets/baileys").makeCacheableSignalKeyStore(state.keys, pino().child({
                 level: 'silent',
                 stream: 'store'
             })),
@@ -95,79 +87,60 @@ async function clientstart() {
         const phoneNumber = await question(chalk.blue.bold('Masukan Nomor WhatsApp :\n'));
         const code = await client.requestPairingCode(phoneNumber, global.pairing);
         console.log(`${chalk.blue.bold('Pairing code:')} : ${chalk.white.bold(code)}`);
+    } else if (!usePairingCode && !client.authState.creds.registered) {
+        // Fallback to QR code if not using pairing code and not registered
+        client.on('qr', qr => {
+            console.log(chalk.yellow.bold('Scan this QR code:'));
+            qrcode.generate(qr, { small: true });
+        });
     }
 
-    const store = makeInMemoryStore({
-        logger: pino().child({
-            level: 'silent',
-            stream: 'store'
-        })
-    });
-
-    store.bind(client.ev);
-
-    client.ev.on("messages.upsert", async (chatUpdate, msg) => {
-        try {
-            const mek = chatUpdate.messages[0]
-            if (!mek.message) return
-            mek.message = (Object.keys(mek.message)[0] === 'ephemeralMessage') ? mek.message.ephemeralMessage.message : mek.message
-            if (mek.key && mek.key.remoteJid === 'status@broadcast') return
-            if (!client.public && !mek.key.fromMe && chatUpdate.type === 'notify') return
-            if (mek.key.id.startsWith('BAE5') && mek.key.id.length === 16) return
-            if (mek.key.id.startsWith('FatihArridho_')) return;
-            const m = smsg(client, mek, store)
-
-            // --- PING Test Logic ---
-            if (m.body && m.body.toLowerCase() === 'ping') {
-                const startTime = process.hrtime();
-                await client.sendMessage(m.chat, { text: 'Pong!' }, { quoted: m });
-                const endTime = process.hrtime(startTime);
-                const latency = (endTime[0] * 1000 + endTime[1] / 1000000).toFixed(2);
-                await client.sendMessage(m.chat, { text: `Latency: ${latency}ms` }, { quoted: m });
-            }
-            // --- End PING Test Logic ---
-
-        } catch (err) {
-            console.log(err)
-        }
-    });
-
-    client.decodeJid = (jid) => {
-        if (!jid) return jid;
-        if (/:\d+@/gi.test(jid)) {
-            let decode = jidDecode(jid) || {}; // jidDecode is not imported, but keeping it for structure if you add it back
-            return decode.user && decode.server && decode.user + '@' + decode.server || jid;
-        } else return jid;
-    };
-
-    client.ev.on('contacts.update', update => {
-        for (let contact of update) {
-            let id = client.decodeJid(contact.id);
-            if (store && store.contacts) store.contacts[id] = {
-                id,
-                name: contact.notify
-            };
-        }
-    });
-
-    client.public = global.status
-
     client.ev.on('connection.update', (update) => {
-        const { konek } = require('./start/lib/connection/connect')
-        konek({ client, update, clientstart, DisconnectReason, Boom })
-    })
+        const { connection, lastDisconnect, qr } = update;
+        if (connection === 'close') {
+            let reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+            if (reason === DisconnectReason.badSession) {
+                console.log(`Bad Session File, Please Delete Session and Scan Again`);
+                clientstart();
+            } else if (reason === DisconnectReason.connectionClosed) {
+                console.log("Connection closed, reconnecting....");
+                clientstart();
+            } else if (reason === DisconnectReason.connectionLost) {
+                console.log("Connection Lost from Server, reconnecting...");
+                clientstart();
+            } else if (reason === DisconnectReason.connectionReplaced) {
+                console.log("Connection Replaced, Another New Session Opened, Please Close Current Session First");
+                clientstart();
+            } else if (reason === DisconnectReason.loggedOut) {
+                console.log(`Device Logged Out, Please Delete Session and Scan Again.`);
+                fs.rmSync('./session', { recursive: true, force: true });
+                clientstart();
+            } else if (reason === DisconnectReason.restartRequired) {
+                console.log("Restart Required, Restarting...");
+                clientstart();
+            } else if (reason === DisconnectReason.timedOut) {
+                console.log("Connection TimedOut, Reconnecting...");
+                clientstart();
+            } else {
+                console.log(`Unknown DisconnectReason: ${reason}|${connection}`);
+                clientstart();
+            }
+        } else if (connection === 'open') {
+            console.log(chalk.green.bold('Client connected!'));
+        }
+    });
 
     client.ev.on('creds.update', saveCreds);
-    return client;
 
+    return client;
 }
 
-clientstart()
+clientstart();
 
-let file = require.resolve(__filename)
+let file = require.resolve(__filename);
 require('fs').watchFile(file, () => {
-    require('fs').unwatchFile(file)
-    console.log('\x1b[0;32m' + __filename + ' \x1b[1;32mupdated!\x1b[0m')
-    delete require.cache[file]
-    require(file)
-})
+    require('fs').unwatchFile(file);
+    console.log('\x1b[0;32m' + __filename + ' \x1b[1;32mupdated!\x1b[0m');
+    delete require.cache[file];
+    require(file);
+});
